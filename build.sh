@@ -17,7 +17,10 @@ set -euo pipefail
 CX_VERSION="26.3.0"
 CX_SHA256="ac99c8ca4b3848f3e81784135f023df266b61c2345726ea55a50b3e030dd6872"
 CX_URL="https://media.codeweavers.com/pub/crossover/source/crossover-sources-${CX_VERSION}.tar.gz"
-ENGINE_ID="wine-11.0-cx${CX_VERSION}"
+# Bump ENGINE_REV for every published rebuild of the same Wine/CrossOver version, so Decanter
+# sees it as a new engine (it compares ids): ENGINE_REV=2 gives wine-11.0-cx26.3.0-r2.
+ENGINE_REV="${ENGINE_REV:-}"
+ENGINE_ID="wine-11.0-cx${CX_VERSION}${ENGINE_REV:+-r$ENGINE_REV}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Autotools can't cope with spaces in paths (".../1. Projects/..."), so the work area
