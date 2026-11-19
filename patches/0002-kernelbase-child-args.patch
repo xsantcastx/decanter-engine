@@ -1,0 +1,63 @@
+Decanter: WINE_DECANTER_CHILD_ARGS="name.exe=args;..." appends arguments to processes started
+from a program with that file name. Steam needs it to give its web view Chromium's
+--in-process-gpu, without which its window is black on macOS. Written for Decanter; LGPL like Wine.
+
+--- a/dlls/kernelbase/process.c	2026-11-19 12:27:35
++++ b/dlls/kernelbase/process.c	2026-11-19 12:27:35
+@@ -500,6 +500,39 @@
+     return ret;
+ }
+ 
++/* Decanter: WINE_DECANTER_CHILD_ARGS="name.exe=args;other.exe=args" appends args to the
++ * command line of every process started from a program with that file name, unless the
++ * command line already contains them. Launchers use it to pass options their own launch
++ * code doesn't forward (e.g. Steam's web view needs Chromium's --in-process-gpu to draw
++ * its window on macOS). */
++static WCHAR *decanter_child_args( const WCHAR *app_name, const WCHAR *cmdline )
++{
++    WCHAR rules[1024], *rule, *next, *eq, *ret;
++    const WCHAR *base, *p;
++    DWORD len;
++    SIZE_T size;
++
++    if (!app_name || !cmdline) return NULL;
++    len = GetEnvironmentVariableW( L"WINE_DECANTER_CHILD_ARGS", rules, ARRAY_SIZE(rules) );
++    if (!len || len >= ARRAY_SIZE(rules)) return NULL;
++    base = app_name;
++    for (p = app_name; *p; p++) if (*p == '\\' || *p == '/') base = p + 1;
++
++    for (rule = rules; rule && *rule; rule = next)
++    {
++        if ((next = wcschr( rule, ';' ))) *next++ = 0;
++        if (!(eq = wcschr( rule, '=' ))) continue;
++        *eq++ = 0;
++        if (wcsicmp( rule, base ) || !*eq || wcsstr( cmdline, eq )) continue;
++        size = lstrlenW( cmdline ) + 1 + lstrlenW( eq ) + 1;
++        if (!(ret = RtlAllocateHeap( GetProcessHeap(), 0, size * sizeof(WCHAR) ))) return NULL;
++        swprintf( ret, size, L"%s %s", cmdline, eq );
++        FIXME( "Decanter: adding %s to %s\n", debugstr_w(eq), debugstr_w(base) );
++        return ret;
++    }
++    return NULL;
++}
++
+ /**********************************************************************
+  *           CreateProcessInternalW   (kernelbase.@)
+  */
+@@ -586,6 +619,16 @@
+     info->hThread = info->hProcess = 0;
+     info->dwProcessId = info->dwThreadId = 0;
+ 
++    /* Decanter: extra arguments for chosen programs (see decanter_child_args) */
++    {
++        WCHAR *extra = decanter_child_args( app_name, tidy_cmdline );
++        if (extra)
++        {
++            if (tidy_cmdline != cmd_line) HeapFree( GetProcessHeap(), 0, tidy_cmdline );
++            tidy_cmdline = extra;
++        }
++    }
++
+     if (!(params = create_process_params( app_name, tidy_cmdline, cur_dir, env, flags, startup_info )))
+     {
+         status = STATUS_NO_MEMORY;

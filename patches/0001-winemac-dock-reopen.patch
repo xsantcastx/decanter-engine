@@ -1,0 +1,65 @@
+Decanter: run WINE_DOCK_REOPEN_CMD when the Dock icon is clicked and the program has
+no window to show (a launcher closed to its tray). Written for Decanter; LGPL like Wine.
+
+--- a/dlls/winemac.drv/cocoa_app.m	2026-11-19 11:06:14
++++ b/dlls/winemac.drv/cocoa_app.m	2026-11-19 11:06:14
+@@ -18,6 +18,9 @@
+  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+  */
+ 
++#include <crt_externs.h>
++#include <spawn.h>
++#include <sys/wait.h>
+ #import "cocoa_app.h"
+ #import "cocoa_cursorclipping.h"
+ #import "cocoa_event.h"
+@@ -2510,10 +2513,48 @@
+     {
+         // Note that "flag" is often wrong.  WineWindows are NSPanels and NSPanels
+         // don't count as "visible windows" for this purpose.
+-        [self unminimizeWindowIfNoneVisible];
++        BOOL anyMinimized = NO;
++        for (WineWindow *window in [NSApp windows])
++        {
++            if ([window isKindOfClass:[WineWindow class]] && [window isMiniaturized])
++                anyMinimized = YES;
++        }
++        if (![self isAnyWineWindowVisible] && !anyMinimized)
++            [self runDockReopenCommand];
++        else
++            [self unminimizeWindowIfNoneVisible];
+         return YES;
+     }
+ 
++    /* Decanter: a launcher that closes its window to the system tray (Battle.net, Steam)
++       has no window left to un-minimize, so clicking its Dock icon did nothing. When
++       WINE_DOCK_REOPEN_CMD is set, run it (through /bin/sh) to ask the program to show
++       its window again; launchers hand that request to their running instance. */
++    - (void) runDockReopenCommand
++    {
++        const char *cmd = getenv("WINE_DOCK_REOPEN_CMD");
++        char *argv[4];
++        pid_t pid;
++        int err;
++
++        if (!cmd || !*cmd)
++            return;
++        argv[0] = (char *)"/bin/sh";
++        argv[1] = (char *)"-c";
++        argv[2] = (char *)cmd;
++        argv[3] = NULL;
++        err = posix_spawn(&pid, "/bin/sh", NULL, NULL, argv, *_NSGetEnviron());
++        if (err)
++        {
++            NSLog(@"WINE_DOCK_REOPEN_CMD failed: %s", strerror(err));
++            return;
++        }
++        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
++            int status;
++            waitpid(pid, &status, 0);
++        });
++    }
++
+     - (NSApplicationTerminateReply) applicationShouldTerminate:(NSApplication *)sender
+     {
+         NSApplicationTerminateReply ret = NSTerminateNow;

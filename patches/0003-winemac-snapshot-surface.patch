@@ -1,0 +1,35 @@
+Decanter: hand Cocoa a snapshot of a window's pixels instead of the live surface memory,
+so a window that redraws often (layered windows such as Battle.net's installer) never
+shows a half-drawn, black frame. Written for Decanter; LGPL like Wine.
+
+--- a/dlls/winemac.drv/surface.c	2026-11-19 14:10:01
++++ b/dlls/winemac.drv/surface.c	2026-11-19 14:10:01
+@@ -84,13 +84,27 @@
+     struct macdrv_window_surface *surface = get_mac_surface(window_surface);
+     CGImageAlphaInfo alpha_info = (window_surface->alpha_mask ? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst);
+     CGColorSpaceRef colorspace;
++    CGDataProviderRef provider = NULL;
++    CFDataRef snapshot;
+     CGImageRef image;
+ 
++    /* Decanter: give Cocoa a copy of the pixels, taken here while win32u holds the surface
++     * lock. The surface's own provider points at the live bits, which Cocoa reads later on
++     * its own thread; by then the app may be halfway through its next update (e.g.
++     * UpdateLayeredWindow fills the surface black before blending), and the window flashes. */
++    if ((snapshot = CFDataCreate(kCFAllocatorDefault, color_bits, color_info->bmiHeader.biSizeImage)))
++    {
++        provider = CGDataProviderCreateWithCFData(snapshot);
++        CFRelease(snapshot);
++    }
++
+     colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+     image = CGImageCreate(color_info->bmiHeader.biWidth, abs(color_info->bmiHeader.biHeight), 8, 32,
+                           color_info->bmiHeader.biSizeImage / abs(color_info->bmiHeader.biHeight), colorspace,
+-                          alpha_info | kCGBitmapByteOrder32Little, surface->provider, NULL, retina_on, kCGRenderingIntentDefault);
++                          alpha_info | kCGBitmapByteOrder32Little, provider ? provider : surface->provider,
++                          NULL, retina_on, kCGRenderingIntentDefault);
+     CGColorSpaceRelease(colorspace);
++    if (provider) CGDataProviderRelease(provider);
+ 
+     macdrv_window_set_color_image(surface->window, image, cgrect_from_rect(*rect), cgrect_from_rect(*dirty));
+     CGImageRelease(image);
