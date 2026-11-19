@@ -16,7 +16,7 @@ set -euo pipefail
 
 ENGINE="${1:?usage: add-d3dmetal.sh <engine dir> <GPTK redist folder or engine with D3DMetal>}"
 SRC="${2:?usage: add-d3dmetal.sh <engine dir> <GPTK redist folder or engine with D3DMetal>}"
-NAMES=(atidxx64 d3d10 d3d11 d3d12 dxgi nvapi64 nvngx-on-metalfx)
+NAMES=(atidxx64 d3d10 d3d11 d3d12 d3d12core dxgi nvapi64 nvngx-on-metalfx)   # whichever the toolkit has
 
 die() { printf 'add-d3dmetal.sh: %s\n' "$*" >&2; exit 1; }
 [ -x "$ENGINE/bin/wine" ] || die "$ENGINE is not an engine (no bin/wine)"
