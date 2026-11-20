@@ -1,0 +1,35 @@
+Allow a view of a file-backed section, mapped with MEM_RESERVE, to be larger than the
+file, as Windows does. LMDB maps its database this way; without it the map fails with
+STATUS_INVALID_VIEW_SIZE, which programs see as "Access denied" (Path of Exile 2 then
+runs without its shader pipeline cache and stutters).
+
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -3543,7 +3543,13 @@
+     if (*size_ptr)
+     {
+         size = *size_ptr;
+-        if (size > full_size - offset.QuadPart) return STATUS_INVALID_VIEW_SIZE;
++        /* Decanter: like Windows, a view of a file-backed section mapped with MEM_RESERVE may
++         * be larger than the file; the part past the end fills in as the file grows. LMDB (Path
++         * of Exile 2's shader cache, among others) maps its database this way. (The server keeps
++         * SEC_RESERVE only for anonymous sections, so a file section shows as SEC_FILE here.) */
++        if (size > full_size - offset.QuadPart &&
++            !((sec_flags & SEC_FILE) && (alloc_type & MEM_RESERVE)))
++            return STATUS_INVALID_VIEW_SIZE;
+     }
+     else
+     {
+--- a/server/mapping.c
++++ b/server/mapping.c
+@@ -1637,7 +1637,9 @@
+     if ((mapping->flags & SEC_IMAGE) ||
+         req->start >= mapping->size ||
+         req->start + req->size < req->start ||
+-        req->start + req->size > round_size( mapping->size, page_mask ))
++        (req->start + req->size > round_size( mapping->size, page_mask ) &&
++         /* Decanter: a reserved view of a file-backed section may extend past the file (see ntdll) */
++         !(mapping->flags & SEC_FILE)))
+     {
+         set_error( STATUS_INVALID_PARAMETER );
+         goto done;
