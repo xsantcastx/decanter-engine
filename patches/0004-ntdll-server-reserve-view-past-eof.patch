@@ -1,11 +1,20 @@
-Allow a view of a file-backed section, mapped with MEM_RESERVE, to be larger than the
-file, as Windows does. LMDB maps its database this way; without it the map fails with
-STATUS_INVALID_VIEW_SIZE, which programs see as "Access denied" (Path of Exile 2 then
-runs without its shader pipeline cache and stutters).
+Let a view of a file-backed section, mapped with MEM_RESERVE, be larger than the file,
+and let its pages be committed as the file grows, as Windows does. LMDB maps its
+database this way; without it opening fails with STATUS_INVALID_VIEW_SIZE and growing
+it with STATUS_ALREADY_COMMITTED, both "Access denied" to programs (Path of Exile 2
+then runs without its shader pipeline cache and stutters).
 
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -3543,7 +3543,13 @@
+@@ -145,6 +145,7 @@
+ #define VPROT_SYSTEM           0x0200  /* system view (underlying mmap not under our control) */
+ #define VPROT_PLACEHOLDER      0x0400
+ #define VPROT_FREE_PLACEHOLDER 0x0800
++#define VPROT_FILE_RESERVE     0x1000  /* Decanter: file view mapped past the end of the file (MEM_RESERVE) */
+ 
+ /* Conversion from VPROT_* to Win32 flags */
+ static const BYTE VIRTUAL_Win32Flags[16] =
+@@ -3543,7 +3544,15 @@
      if (*size_ptr)
      {
          size = *size_ptr;
@@ -14,12 +23,25 @@ runs without its shader pipeline cache and stutters).
 +         * be larger than the file; the part past the end fills in as the file grows. LMDB (Path
 +         * of Exile 2's shader cache, among others) maps its database this way. (The server keeps
 +         * SEC_RESERVE only for anonymous sections, so a file section shows as SEC_FILE here.) */
-+        if (size > full_size - offset.QuadPart &&
-+            !((sec_flags & SEC_FILE) && (alloc_type & MEM_RESERVE)))
-+            return STATUS_INVALID_VIEW_SIZE;
++        if (size > full_size - offset.QuadPart)
++        {
++            if (!((sec_flags & SEC_FILE) && (alloc_type & MEM_RESERVE))) return STATUS_INVALID_VIEW_SIZE;
++            sec_flags |= VPROT_FILE_RESERVE;  /* its pages may be committed later, as on Windows */
++        }
      }
      else
      {
+@@ -5218,7 +5227,9 @@
+     else  /* commit the pages */
+     {
+         if (!(view = find_view( base, size ))) status = STATUS_NOT_MAPPED_VIEW;
+-        else if (view->protect & SEC_FILE) status = STATUS_ALREADY_COMMITTED;
++        /* Decanter: a file view mapped past the end of the file (LMDB) commits its pages as the
++         * file grows; they are file-backed already, so committing only sets the protection. */
++        else if ((view->protect & SEC_FILE) && !(view->protect & VPROT_FILE_RESERVE)) status = STATUS_ALREADY_COMMITTED;
+         else if (view->protect & VPROT_FREE_PLACEHOLDER) status = STATUS_CONFLICTING_ADDRESSES;
+         else if (!(status = set_protection( view, base, size, protect )) && (view->protect & SEC_RESERVE))
+         {
 --- a/server/mapping.c
 +++ b/server/mapping.c
 @@ -1637,7 +1637,9 @@
