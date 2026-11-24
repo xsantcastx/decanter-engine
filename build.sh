@@ -109,7 +109,7 @@ if [ ! -f Makefile ]; then
     --without-alsa --without-capi --without-cups --without-dbus --without-fontconfig \
     --without-gettext --without-gphoto --without-gssapi --without-gstreamer \
     --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite \
-    --without-pulse --without-sane --without-sdl --without-udev --without-usb \
+    --without-pulse --without-sane --with-sdl --without-udev --without-usb \
     --without-v4l2 --without-vulkan --without-wayland --without-x \
     > "$WORK/configure-$ENGINE_ID.log" 2>&1 \
     || { tail -30 "$WORK/configure-$ENGINE_ID.log"; die "configure failed (log: $WORK/configure-$ENGINE_ID.log)"; }
@@ -121,6 +121,12 @@ fi
 # so give it the usual name: at runtime a missing library just means "no Vulkan".
 grep -q "^#define SONAME_LIBVULKAN" include/config.h \
   || printf '\n/* Decanter: see engine/build.sh */\n#define SONAME_LIBVULKAN "libMoltenVK.dylib"\n' >> include/config.h
+
+# A build folder configured earlier (e.g. before SDL was added) keeps its old options; make sure
+# this one has what Decanter needs, or the engine would ship without controller support.
+for so in SONAME_LIBSDL2 SONAME_LIBGNUTLS SONAME_LIBFREETYPE; do
+  grep -q "^#define $so " include/config.h || die "Wine was configured without $so: run engine/build.sh --clean"
+done
 
 # --- build + install ---------------------------------------------------------------
 say "Building with $JOBS jobs (this takes a while)"
@@ -155,9 +161,9 @@ bundle() {  # copy every deps dylib a file depends on into lib/, recursively
     install_name_tool -change "$dep" "@loader_path/$rel/$base" "$f" 2>/dev/null
   done
 }
-# Wine dlopens gnutls and freetype by file name (found through the engine's lib/ on
+# Wine dlopens gnutls, freetype and SDL2 by file name (found through the engine's lib/ on
 # DYLD_FALLBACK_LIBRARY_PATH, which Decanter's Runner sets), so copy them explicitly.
-for lib in "$X86_BREW/lib/libgnutls.30.dylib" "$X86_BREW/lib/libfreetype.6.dylib"; do
+for lib in "$X86_BREW/lib/libgnutls.30.dylib" "$X86_BREW/lib/libfreetype.6.dylib" "$X86_BREW/lib/libSDL2-2.0.0.dylib"; do
   [ -f "$lib" ] || die "missing $lib (did build-deps.sh finish?)"
   base="$(basename "$lib")"
   cp -L "$lib" "$OUT/lib/$base"; chmod u+w "$OUT/lib/$base"

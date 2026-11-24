@@ -23,6 +23,7 @@ copy gnutls   "$SRC/gnutls/gnutls/LICENSE"
 copy gmp      "$SRC/gnutls/gmp/COPYING" "$SRC/gnutls/gmp/COPYING.LESSERv3" "$SRC/gnutls/gmp/COPYINGv2" "$SRC/gnutls/gmp/COPYINGv3"
 copy nettle   "$WORK/extra/nettle-3.10/COPYING.LESSERv3" "$WORK/extra/nettle-3.10/COPYINGv2" "$WORK/extra/nettle-3.10/COPYINGv3"
 copy freetype "$SRC/freetype/LICENSE.TXT" "$SRC/freetype/docs/FTL.TXT" "$SRC/freetype/docs/GPLv2.TXT"
+copy sdl2     "$(ls -d "$WORK"/extra/SDL2-*/ | tail -1)LICENSE.txt"   # the SDL build-deps.sh built
 mkdir -p "$DOC/wine-mono"
 printf 'Wine Mono %s: https://gitlab.winehq.org/mono/wine-mono (mostly MIT; see its COPYING and the licenses of its components).\n' \
   "$(ls "$ENGINE/share/wine/mono" 2>/dev/null | sed 's/wine-mono-//' | head -1)" > "$DOC/wine-mono/SOURCE.txt"

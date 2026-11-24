@@ -36,7 +36,7 @@ engine that contains your home path.
 
 ## What the scripts do
 
-- **`build-deps.sh`** builds the x86_64 libraries Wine links (GMP, Nettle, GnuTLS, FreeType),
+- **`build-deps.sh`** builds the x86_64 libraries Wine links (GMP, Nettle, GnuTLS, FreeType, and SDL2 for game controllers),
   because Homebrew no longer installs Intel packages on Apple silicon.
 - **`build.sh`** verifies the CrossOver source's SHA-256, applies `patches/`, configures Wine
   with `--enable-archs=i386,x86_64` (new WoW64), builds and installs it, bundles the
@@ -44,7 +44,8 @@ engine that contains your home path.
   license texts, ad-hoc signs it and writes `decanter-engine.json`.
 - **`strip.sh`** removes debug sections from the Windows files (1.3 GB → about 510 MB).
 - **`add-mono.sh`** adds Wine Mono 10.4.1 as a shared install, so bottles never ask to download it.
-- **`package.sh`** makes the release archive and feed, and refuses engines containing D3DMetal.
+- **`package.sh`** makes the release archive and feed, and refuses engines containing D3DMetal. Decanter only accepts a feed signed with its release key; `package.sh` signs it when
+  Decanter's `scripts/feed-sign.swift` is beside this folder.
 
 ## Patches
 
@@ -58,6 +59,12 @@ All LGPL-2.1-or-later, like Wine.
   when its installer or updater starts it.
 - **`0003-winemac-snapshot-surface`**: hand Cocoa a copy of a window's pixels instead of the
   live surface memory, so windows that redraw often never show half-drawn, black frames.
+- **`0004-ntdll-server-reserve-view-past-eof`**: like Windows, a view of a file section mapped
+  with `MEM_RESERVE` may be larger than the file and commits its pages as the file grows.
+  LMDB maps its database this way (Path of Exile 2's shader cache).
+- **`0005-ddraw-thread-lock-exports`**: export `AcquireDDThreadLock`/`ReleaseDDThreadLock` from
+  ddraw, as Windows does. DirectDraw wrappers that load the system ddraw (GOG's classic Diablo)
+  call them; Wine's ddraw does its own locking, so they do nothing.
 
 ## Build workarounds (commented in the scripts)
 

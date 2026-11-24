@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds the x86_64 libraries the engine links against (gmp, nettle, gnutls, freetype)
-# from the copies inside CodeWeavers' CrossOver source package, into ~/.cache/decanter-engine/deps.
+# Builds the x86_64 libraries the engine links against (gmp, nettle, gnutls, freetype from the
+# copies inside CodeWeavers' CrossOver source package; SDL2 from libsdl.org's release), into ~/.cache/decanter-engine/deps.
 # Homebrew no longer installs Intel packages on Apple silicon, so we build them here.
 # Called by engine/build.sh; safe to re-run (finished libraries are skipped).
 set -euo pipefail
@@ -92,6 +92,22 @@ for f in src/dlg/dlg.c include/dlg/dlg.h include/dlg/output.h; do
 done
 build freetype libfreetype.dylib "$SRC/freetype" \
   --without-harfbuzz --without-png --without-brotli --without-bzip2 --with-zlib=yes
+
+# SDL2 (game controllers). Wine's controller driver uses it to recognize Xbox, PlayStation and
+# Switch controllers and offer them to games as Xbox controllers; without it, macOS's view of an
+# Xbox Series controller has no buttons Wine can read. Not in CrossOver's package: libsdl.org's
+# release (zlib license), pinned by checksum.
+SDL_VERSION=2.32.10
+SDL_SHA256=5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165
+SDL_TGZ="$WORK/extra/SDL2-$SDL_VERSION.tar.gz"
+SDL_SRC="$WORK/extra/SDL2-$SDL_VERSION"
+if [ ! -f "$SDL_TGZ" ]; then
+  say "downloading SDL $SDL_VERSION from libsdl.org's GitHub releases"
+  curl -fsSL -o "$SDL_TGZ.part" "https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL2-$SDL_VERSION.tar.gz" && mv "$SDL_TGZ.part" "$SDL_TGZ"
+fi
+echo "$SDL_SHA256  $SDL_TGZ" | shasum -a 256 -c - >/dev/null || die "checksum mismatch for $SDL_TGZ"
+[ -x "$SDL_SRC/configure" ] || tar -xzf "$SDL_TGZ" -C "$WORK/extra"
+build sdl2 libSDL2.dylib "$SDL_SRC"   # default options, as in the SDL builds Wine is usually tested with
 
 say "done"
 ls "$DEPS/lib"/*.dylib

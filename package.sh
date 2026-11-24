@@ -43,10 +43,19 @@ SHA="$(shasum -a 256 "$ARCHIVE" | cut -d' ' -f1)"
 SIZE="$(stat -f %z "$ARCHIVE")"
 UNPACKED="$(du -sk "$ENGINE" | cut -f1)"
 python3 - "$OUT/engines.json" "$ID" "$WINEV" "${BASE%/}/$ID.tar.xz" "$SHA" "$SIZE" "$((UNPACKED * 1024))" <<'PY'
-import json, sys
+import json, sys, time
 path, id_, wine, url, sha, size, unpacked = sys.argv[1:]
-feed = {"schema": 1, "engines": [{"id": id_, "wine": wine, "url": url, "sha256": sha,
+feed = {"schema": 1, "issued": int(time.time()), "engines": [{"id": id_, "wine": wine, "url": url, "sha256": sha,
                                    "size": int(size), "unpacked_size": int(unpacked), "min_macos": "14.0"}]}
 open(path, "w").write(json.dumps(feed, indent=2) + "\n")
 PY
-echo "Wrote $ARCHIVE ($((SIZE / 1048576)) MB) and $OUT/engines.json"
+# Signed with the release key: Decanter ignores an unsigned engine list. Publish both files.
+# The signing script lives in Decanter's app repository; a build from this folder alone
+# gets an unsigned list, fine for a local test feed (DECANTER_ENGINE_FEED on this Mac).
+SIGNER="$(dirname "$0")/../scripts/feed-sign.swift"
+if [ -f "$SIGNER" ]; then
+  swift "$SIGNER" sign "$OUT/engines.json"
+  echo "Wrote $ARCHIVE ($((SIZE / 1048576)) MB), $OUT/engines.json and engines.json.sig"
+else
+  echo "Wrote $ARCHIVE ($((SIZE / 1048576)) MB) and $OUT/engines.json (unsigned: no feed-sign.swift beside this folder)"
+fi

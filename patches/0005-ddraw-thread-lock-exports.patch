@@ -1,0 +1,41 @@
+--- a/dlls/ddraw/ddraw.spec
++++ b/dlls/ddraw/ddraw.spec
+@@ -3,6 +3,7 @@
+ @ stub DDInternalLock
+ @ stub DDInternalUnlock
+ @ stub DSoundHelp
++@ stdcall AcquireDDThreadLock()
+ @ stdcall DirectDrawCreate(ptr ptr ptr)
+ @ stdcall DirectDrawCreateClipper(long ptr ptr)
+ @ stdcall DirectDrawCreateEx(ptr ptr ptr ptr)
+@@ -26,3 +27,4 @@
+ @ stub VidMemFree
+ @ stub VidMemInit
+ @ stub VidMemLargestFree
++@ stdcall ReleaseDDThreadLock()
+--- a/dlls/ddraw/main.c
++++ b/dlls/ddraw/main.c
+@@ -349,6 +349,23 @@
+ }
+ 
+ /***********************************************************************
++ * AcquireDDThreadLock (DDRAW.@)
++ * ReleaseDDThreadLock (DDRAW.@)
++ *
++ * Decanter: exported by Windows' ddraw.dll; wrappers that load the system
++ * ddraw (GOG's Diablo) call them. Wine's ddraw does its own locking.
++ */
++void WINAPI AcquireDDThreadLock(void)
++{
++    TRACE("\n");
++}
++
++void WINAPI ReleaseDDThreadLock(void)
++{
++    TRACE("\n");
++}
++
++/***********************************************************************
+  * DirectDrawCreate (DDRAW.@)
+  *
+  * Creates legacy DirectDraw Interfaces. Can't create IDirectDraw7
