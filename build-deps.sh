@@ -109,5 +109,26 @@ echo "$SDL_SHA256  $SDL_TGZ" | shasum -a 256 -c - >/dev/null || die "checksum mi
 [ -x "$SDL_SRC/configure" ] || tar -xzf "$SDL_TGZ" -C "$WORK/extra"
 build sdl2 libSDL2.dylib "$SDL_SRC"   # default options, as in the SDL builds Wine is usually tested with
 
+# MoltenVK (Vulkan on Metal). Wine looks for libMoltenVK.dylib at runtime; with it, Vulkan games
+# run and Wine's Direct3D 9-11 can draw through Vulkan instead of OpenGL. Khronos' prebuilt
+# release (Apache-2.0), pinned by checksum; the standard build, not the private-API one. Only
+# its x86_64 half is kept: the engine runs under Rosetta.
+MVK_VERSION=1.4.2
+MVK_SHA256=f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e
+MVK_TAR="$WORK/extra/MoltenVK-macos-$MVK_VERSION.tar"
+MVK_SRC="$WORK/extra/MoltenVK-$MVK_VERSION"
+if [ ! -f "$MVK_TAR" ]; then
+  say "downloading MoltenVK $MVK_VERSION from KhronosGroup's GitHub releases"
+  curl -fsSL -o "$MVK_TAR.part" "https://github.com/KhronosGroup/MoltenVK/releases/download/v$MVK_VERSION/MoltenVK-macos.tar" && mv "$MVK_TAR.part" "$MVK_TAR"
+fi
+echo "$MVK_SHA256  $MVK_TAR" | shasum -a 256 -c - >/dev/null || die "checksum mismatch for $MVK_TAR"
+if [ ! -f "$DEPS/lib/libMoltenVK.dylib" ]; then
+  rm -rf "$MVK_SRC"; mkdir -p "$MVK_SRC"
+  tar -xf "$MVK_TAR" -C "$MVK_SRC" --strip-components 1 MoltenVK/LICENSE MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib
+  mkdir -p "$DEPS/lib"
+  lipo "$MVK_SRC/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib" -thin x86_64 -output "$DEPS/lib/libMoltenVK.dylib"
+  install_name_tool -id "$DEPS/lib/libMoltenVK.dylib" "$DEPS/lib/libMoltenVK.dylib" 2>/dev/null
+fi
+
 say "done"
 ls "$DEPS/lib"/*.dylib

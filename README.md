@@ -37,7 +37,8 @@ engine that contains your home path.
 ## What the scripts do
 
 - **`build-deps.sh`** builds the x86_64 libraries Wine links (GMP, Nettle, GnuTLS, FreeType, and SDL2 for game controllers),
-  because Homebrew no longer installs Intel packages on Apple silicon.
+  because Homebrew no longer installs Intel packages on Apple silicon. It also takes the
+  x86_64 half of Khronos' prebuilt MoltenVK 1.4.2 (Vulkan on Metal, Apache-2.0), SHA-256 pinned.
 - **`build.sh`** verifies the CrossOver source's SHA-256, applies `patches/`, configures Wine
   with `--enable-archs=i386,x86_64` (new WoW64), builds and installs it, bundles the
   libraries with `@loader_path` references, strips debug data, adds Wine Mono and the
@@ -71,7 +72,9 @@ All LGPL-2.1-or-later, like Wine.
 - GnuTLS: `--disable-gost`, and single-word `NETTLE_LIBS`/`HOGWEED_LIBS`/`GMP_LIBS`.
 - FreeType: placeholder `dlg` files, so the build doesn't try to fetch a git submodule.
 - Wine: OpenGL left to auto-detect (Wine 11 wants EGL, which macOS lacks), and
-  `SONAME_LIBVULKAN` defined after configure. MoltenVK isn't bundled yet.
+  `SONAME_LIBVULKAN` defined after configure. MoltenVK is bundled in `lib/`, where Wine finds
+  it at runtime: Vulkan games run, and Wine's Direct3D 9-11 draws through Vulkan with
+  `WINE_D3D_CONFIG=renderer=vulkan` (OpenGL by default). No DXVK yet.
 - The engine finds GnuTLS and FreeType through `DYLD_FALLBACK_LIBRARY_PATH`. macOS drops
   `DYLD_*` when a process starts through a protected system tool (`nohup`, `arch`,
   `/bin/sh`), so start `bin/wine` directly.

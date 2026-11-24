@@ -117,8 +117,9 @@ if [ ! -f Makefile ]; then
 fi
 
 # CrossOver's win32u (CW HACK 25909) always names SONAME_LIBVULKAN, which configure only
-# defines when it finds MoltenVK. We don't bundle MoltenVK yet (D3DMetal doesn't need it),
-# so give it the usual name: at runtime a missing library just means "no Vulkan".
+# defines when it finds MoltenVK at configure time. Configure runs --without-vulkan (Wine has its
+# own Vulkan headers), so give it the usual name; build-deps.sh fetches MoltenVK and the bundling
+# step below puts it in lib/, where Wine finds it at runtime.
 grep -q "^#define SONAME_LIBVULKAN" include/config.h \
   || printf '\n/* Decanter: see engine/build.sh */\n#define SONAME_LIBVULKAN "libMoltenVK.dylib"\n' >> include/config.h
 
@@ -161,9 +162,9 @@ bundle() {  # copy every deps dylib a file depends on into lib/, recursively
     install_name_tool -change "$dep" "@loader_path/$rel/$base" "$f" 2>/dev/null
   done
 }
-# Wine dlopens gnutls, freetype and SDL2 by file name (found through the engine's lib/ on
+# Wine dlopens gnutls, freetype, SDL2 and MoltenVK by file name (found through the engine's lib/ on
 # DYLD_FALLBACK_LIBRARY_PATH, which Decanter's Runner sets), so copy them explicitly.
-for lib in "$X86_BREW/lib/libgnutls.30.dylib" "$X86_BREW/lib/libfreetype.6.dylib" "$X86_BREW/lib/libSDL2-2.0.0.dylib"; do
+for lib in "$X86_BREW/lib/libgnutls.30.dylib" "$X86_BREW/lib/libfreetype.6.dylib" "$X86_BREW/lib/libSDL2-2.0.0.dylib" "$X86_BREW/lib/libMoltenVK.dylib"; do
   [ -f "$lib" ] || die "missing $lib (did build-deps.sh finish?)"
   base="$(basename "$lib")"
   cp -L "$lib" "$OUT/lib/$base"; chmod u+w "$OUT/lib/$base"
